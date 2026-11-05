@@ -263,8 +263,16 @@
     <!-- MODAL 1: REGISTER PRESCRIPTION -->
     <v-dialog v-model="showAddRxModal" max-width="700px" persistent>
       <v-card class="pa-4 rounded-lg">
-        <v-card-title class="font-weight-bold text-h6 pb-2 border-b">
-          Register Doctor's Prescription
+        <v-card-title class="font-weight-bold text-h6 d-flex justify-space-between align-center pb-2 border-b">
+          <span>Register Doctor's Prescription</span>
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            size="small"
+            color="grey-darken-2"
+            @click="showAddRxModal = false"
+            title="Close"
+          ></v-btn>
         </v-card-title>
         <v-card-text class="pt-4">
           <v-form @submit.prevent="savePrescription">
@@ -324,8 +332,8 @@
             </v-btn>
 
             <div class="d-flex justify-end ga-2 pt-2 border-t">
-              <v-btn variant="text" @click="showAddRxModal = false">Cancel</v-btn>
-              <v-btn color="primary" type="submit" :loading="savingRx">Save Prescription</v-btn>
+              <v-btn color="grey-darken-2" variant="outlined" class="text-none" @click="showAddRxModal = false">Cancel</v-btn>
+              <v-btn color="primary" type="submit" :loading="savingRx" class="text-none font-weight-bold">Save Prescription</v-btn>
             </div>
           </v-form>
         </v-card-text>
@@ -336,8 +344,18 @@
     <v-dialog v-model="showDispenseModal" max-width="750px" persistent>
       <v-card class="pa-4 rounded-lg">
         <v-card-title class="font-weight-bold text-h6 d-flex justify-space-between align-center pb-2 border-b">
-          <span>Clinical Dispensing Desk</span>
-          <v-chip color="primary" variant="flat" size="small">{{ activeDispenseRx?.prescription_number }}</v-chip>
+          <div class="d-flex align-center">
+            <span>Clinical Dispensing Desk</span>
+            <v-chip color="primary" variant="flat" size="small" class="ml-2 font-mono">{{ activeDispenseRx?.prescription_number }}</v-chip>
+          </div>
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            size="small"
+            color="grey-darken-2"
+            @click="showDispenseModal = false"
+            title="Close"
+          ></v-btn>
         </v-card-title>
 
         <v-card-text class="pt-3">
@@ -407,7 +425,7 @@
         </v-card-text>
 
         <v-card-actions class="pa-4 border-t">
-          <v-btn variant="text" @click="showDispenseModal = false">Cancel</v-btn>
+          <v-btn color="grey-darken-2" variant="outlined" class="text-none" @click="showDispenseModal = false">Cancel</v-btn>
           <v-spacer></v-spacer>
           <v-btn
             color="success"

@@ -3,13 +3,14 @@
     <!-- Navigation Drawer -->
     <v-navigation-drawer
       v-model="drawer"
-      :rail="rail"
-      permanent
+      :rail="!mobile && rail"
+      :permanent="!mobile"
+      :temporary="mobile"
       color="white"
       class="elevation-1"
     >
       <div class="pa-4 d-flex align-center justify-space-between border-b">
-        <div class="d-flex align-center" v-if="!rail">
+        <div class="d-flex align-center" v-if="!rail || mobile">
           <v-avatar color="primary" size="36" class="mr-3">
             <v-icon icon="mdi-pill" color="white" size="20"></v-icon>
           </v-avatar>
@@ -19,15 +20,23 @@
           </div>
         </div>
         <v-btn
+          v-if="!mobile"
           variant="text"
           density="comfortable"
           :icon="rail ? 'mdi-chevron-right' : 'mdi-chevron-left'"
           @click.stop="rail = !rail"
         ></v-btn>
+        <v-btn
+          v-else
+          variant="text"
+          density="comfortable"
+          icon="mdi-close"
+          @click.stop="drawer = false"
+        ></v-btn>
       </div>
 
       <!-- Navigation List -->
-      <v-list density="comfortable" nav class="mt-2" color="primary">
+      <v-list density="comfortable" nav class="mt-2" color="primary" @click:select="mobile && (drawer = false)">
         <v-list-item
           prepend-icon="mdi-view-dashboard-outline"
           title="Dashboard"
@@ -191,7 +200,7 @@
 
     <!-- Main Content -->
     <v-main style="background-color: #F8FAFC;">
-      <v-container fluid class="pa-4 pa-md-6">
+      <v-container fluid class="pa-2 pa-sm-4 pa-md-6">
         <router-view />
       </v-container>
     </v-main>
@@ -220,14 +229,16 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useDisplay } from 'vuetify';
 import { useAuthStore } from '@/stores/auth';
 import { useNotificationStore } from '@/stores/notification';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const notifyStore = useNotificationStore();
+const { mobile } = useDisplay();
 
-const drawer = ref(true);
+const drawer = ref(!mobile.value);
 const rail = ref(false);
 
 const userInitials = computed(() => {

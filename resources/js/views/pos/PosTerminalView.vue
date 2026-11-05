@@ -377,10 +377,20 @@
     <v-dialog v-model="showCheckoutModal" max-width="650px" persistent>
       <v-card class="pa-4 rounded-lg">
         <v-card-title class="d-flex justify-space-between align-center pb-2 border-b">
-          <span class="text-h6 font-weight-bold">POS Checkout & Payment</span>
-          <v-chip color="teal" size="default" variant="flat" class="font-mono font-weight-bold">
-            KES {{ cartGrandTotal.toFixed(2) }}
-          </v-chip>
+          <div class="d-flex align-center">
+            <span class="text-h6 font-weight-bold">POS Checkout & Payment</span>
+            <v-chip color="teal" size="default" variant="flat" class="font-mono font-weight-bold ml-2">
+              KES {{ cartGrandTotal.toFixed(2) }}
+            </v-chip>
+          </div>
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            size="small"
+            color="grey-darken-2"
+            @click="showCheckoutModal = false"
+            title="Close"
+          ></v-btn>
         </v-card-title>
 
         <v-card-text class="pt-4">
@@ -428,12 +438,45 @@
               </div>
             </div>
 
-            <!-- MPESA / REFERENCE -->
+            <!-- MPESA / STK PUSH PROMPT -->
             <div v-if="selectedPaymentMethod === 'mpesa'" class="mb-3">
+              <v-card variant="outlined" class="pa-3 bg-green-lighten-5 border-green mb-2">
+                <div class="text-caption font-weight-bold text-green-darken-4 mb-2 d-flex align-center">
+                  <v-icon icon="mdi-cellphone-wireless" color="green-darken-3" class="mr-1"></v-icon>
+                  LIPA NA M-PESA ONLINE PROMPT (STK PUSH)
+                </div>
+                <v-row density="compact" align="center">
+                  <v-col cols="12" sm="7">
+                    <v-text-field
+                      v-model="mpesaPhone"
+                      label="Customer Phone Number *"
+                      placeholder="e.g. 0712345678"
+                      variant="outlined"
+                      density="compact"
+                      bg-color="white"
+                      hide-details
+                    ></v-text-field>
+                  </v-col>
+                  <v-col cols="12" sm="5">
+                    <v-btn
+                      block
+                      color="green-darken-2"
+                      prepend-icon="mdi-send"
+                      class="text-none font-weight-bold"
+                      style="height: 40px;"
+                      :loading="sendingMpesaPrompt"
+                      @click="triggerMpesaPrompt"
+                    >
+                      Prompt Phone
+                    </v-btn>
+                  </v-col>
+                </v-row>
+              </v-card>
+
               <v-text-field
                 v-model="singleRef"
                 label="M-Pesa Transaction Code *"
-                placeholder="e.g. QHJ872619A"
+                placeholder="e.g. QHJ872619A (Auto-filled on prompt confirmation)"
                 variant="outlined"
                 density="compact"
                 hide-details
@@ -504,7 +547,7 @@
         </v-card-text>
 
         <v-card-actions class="pa-4 border-t">
-          <v-btn variant="text" @click="showCheckoutModal = false" :disabled="processingSale">Cancel</v-btn>
+          <v-btn color="grey-darken-2" variant="outlined" class="text-none" @click="showCheckoutModal = false" :disabled="processingSale">Cancel</v-btn>
           <v-spacer></v-spacer>
           <v-btn
             color="primary"
@@ -521,98 +564,28 @@
       </v-card>
     </v-dialog>
 
-    <!-- MODAL 2: RECEIPT PREVIEW & PRINT -->
-    <v-dialog v-model="showReceiptModal" max-width="400px">
-      <v-card class="pa-4 rounded-lg">
-        <div class="text-center mb-3">
-          <v-icon icon="mdi-check-circle" color="success" size="48" class="mb-1"></v-icon>
-          <h3 class="text-h6 font-weight-bold">Sale Completed!</h3>
-          <div class="text-caption text-grey font-mono">{{ completedSale?.receipt_number }}</div>
-        </div>
-
-        <!-- THERMAL RECEIPT PREVIEW (80mm) -->
-        <div class="thermal-receipt-preview pa-3 bg-white border rounded font-mono text-caption" id="printable-receipt">
-          <div class="text-center font-weight-bold text-body-2">{{ completedSale?.pharmacy?.name || 'AfyaMeds Pharmacy' }}</div>
-          <div class="text-center text-caption text-grey">{{ completedSale?.branch?.name || 'Main Branch' }}</div>
-          <div class="text-center text-caption text-grey">Tel: {{ completedSale?.pharmacy?.phone || '0700000000' }}</div>
-          <div class="my-1 border-t-dashed"></div>
-
-          <div><b>Receipt #:</b> {{ completedSale?.receipt_number }}</div>
-          <div><b>Date & Time:</b> {{ formatIsoDateTime(completedSale?.sale_date || completedSale?.created_at) }}</div>
-          <div><b>Cashier:</b> {{ completedSale?.cashier?.name }}</div>
-          <div><b>Customer:</b> {{ completedSale?.customer?.name || 'Walk-in Customer' }}</div>
-          <div class="my-1 border-t-dashed"></div>
-
-          <table class="w-100 receipt-table">
-            <thead>
-              <tr class="border-b">
-                <th class="text-start">Item</th>
-                <th class="text-center">Qty</th>
-                <th class="text-end">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in completedSale?.items" :key="item.id">
-                <td>{{ item.product?.name }}</td>
-                <td class="text-center">{{ Number(item.quantity) }}</td>
-                <td class="text-end font-weight-bold">{{ Number(item.subtotal).toFixed(2) }}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="my-1 border-t-dashed"></div>
-          <div class="d-flex justify-space-between font-weight-bold">
-            <span>TOTAL:</span>
-            <span>KES {{ Number(completedSale?.total_amount).toFixed(2) }}</span>
-          </div>
-
-          <div class="my-1 border-t-dashed"></div>
-          <div class="font-weight-bold text-caption">Payment Details:</div>
-          <div v-for="p in completedSale?.payments" :key="p.id" class="d-flex justify-space-between text-caption">
-            <span>{{ p.payment_method?.toUpperCase() }}:</span>
-            <span>KES {{ Number(p.amount).toFixed(2) }}</span>
-          </div>
-
-          <div class="my-2 border-t-dashed"></div>
-          <div class="text-center text-caption text-grey">Quick recovery & good health!</div>
-        </div>
-
-        <v-card-actions class="mt-4 ga-2">
-          <v-btn
-            variant="outlined"
-            color="primary"
-            prepend-icon="mdi-printer"
-            @click="printReceipt"
-            class="flex-grow-1 text-none"
-          >
-            Print
-          </v-btn>
-          <v-btn
-            variant="tonal"
-            color="primary"
-            prepend-icon="mdi-file-pdf-box"
-            @click="downloadReceiptPdf"
-            class="flex-grow-1 text-none"
-          >
-            PDF
-          </v-btn>
-          <v-btn
-            color="success"
-            variant="flat"
-            @click="startNewSale"
-            class="flex-grow-1 text-none font-weight-bold"
-          >
-            New Sale
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <!-- MODAL 2: RECEIPT PREVIEW & PRINT (Dedicated Modular Component) -->
+    <ReceiptModal
+      v-model="showReceiptModal"
+      :sale="completedSale"
+      @new-sale="startNewSale"
+    />
 
     <!-- MODAL 3: QUICK ADD CUSTOMER -->
     <v-dialog v-model="showAddCustomerModal" max-width="500px">
       <v-card class="pa-4 rounded-lg">
-        <v-card-title class="font-weight-bold text-h6">Register New Customer</v-card-title>
-        <v-card-text>
+        <v-card-title class="font-weight-bold text-h6 d-flex justify-space-between align-center pb-2 border-b">
+          <span>Register New Customer</span>
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            size="small"
+            color="grey-darken-2"
+            @click="showAddCustomerModal = false"
+            title="Close"
+          ></v-btn>
+        </v-card-title>
+        <v-card-text class="pt-3">
           <v-form @submit.prevent="saveNewCustomer">
             <v-text-field v-model="newCustomer.name" label="Full Name *" variant="outlined" density="compact" required class="mb-2"></v-text-field>
             <v-text-field v-model="newCustomer.phone" label="Phone Number" variant="outlined" density="compact" class="mb-2"></v-text-field>
@@ -634,9 +607,9 @@
               density="compact"
               class="mb-2"
             ></v-text-field>
-            <div class="d-flex justify-end ga-2 mt-3">
-              <v-btn variant="text" @click="showAddCustomerModal = false">Cancel</v-btn>
-              <v-btn color="primary" type="submit" :loading="savingCustomer">Save Customer</v-btn>
+            <div class="d-flex justify-end ga-2 mt-3 pt-2 border-t">
+              <v-btn color="grey-darken-2" variant="outlined" class="text-none" @click="showAddCustomerModal = false">Cancel</v-btn>
+              <v-btn color="primary" type="submit" :loading="savingCustomer" class="text-none font-weight-bold">Save Customer</v-btn>
             </div>
           </v-form>
         </v-card-text>
@@ -646,8 +619,18 @@
     <!-- MODAL 4: HELD CARTS -->
     <v-dialog v-model="showHeldCartsModal" max-width="500px">
       <v-card class="pa-4 rounded-lg">
-        <v-card-title class="font-weight-bold text-h6">Held Transactions</v-card-title>
-        <v-card-text>
+        <v-card-title class="font-weight-bold text-h6 d-flex justify-space-between align-center pb-2 border-b">
+          <span>Held Transactions</span>
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            size="small"
+            color="grey-darken-2"
+            @click="showHeldCartsModal = false"
+            title="Close"
+          ></v-btn>
+        </v-card-title>
+        <v-card-text class="pt-3">
           <v-list v-if="heldCarts.length > 0">
             <v-list-item
               v-for="(h, idx) in heldCarts"
@@ -664,19 +647,27 @@
                 {{ h.items.length }} items | KES {{ h.total.toFixed(2) }} | {{ formatIsoDateTime(h.time) }}
               </v-list-item-subtitle>
               <template v-slot:append>
-                <v-btn size="small" color="primary" variant="tonal" @click="resumeHeldCart(idx)" class="mr-1">Resume</v-btn>
+                <v-btn size="small" color="primary" variant="tonal" @click="resumeHeldCart(idx)" class="mr-1 text-none">Resume</v-btn>
                 <v-btn size="small" color="error" variant="text" icon="mdi-delete" @click="heldCarts.splice(idx, 1)"></v-btn>
               </template>
             </v-list-item>
           </v-list>
-          <div v-else class="text-center py-6 text-grey">No held carts</div>
+          <div v-else class="text-center py-6 text-grey">No held transactions</div>
         </v-card-text>
-        <v-card-actions>
+        <v-card-actions class="border-t">
           <v-spacer></v-spacer>
-          <v-btn variant="text" @click="showHeldCartsModal = false">Close</v-btn>
+          <v-btn color="grey-darken-2" variant="outlined" class="text-none" @click="showHeldCartsModal = false">Close</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- MODAL 5: M-PESA STK PUSH PROMPT DIALOG (Dedicated Modular Component) -->
+    <MpesaPromptModal
+      v-model="showMpesaPromptModal"
+      :amount="cartGrandTotal"
+      :initial-phone="mpesaPhone || selectedCustomer?.phone"
+      @confirmed="onMpesaConfirmed"
+    />
   </div>
 </template>
 
@@ -685,6 +676,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import api from '@/services/api';
 import { useNotificationStore } from '@/stores/notification';
 import { formatIsoDateTime } from '@/utils/formatters';
+import MpesaPromptModal from '@/components/pos/MpesaPromptModal.vue';
+import ReceiptModal from '@/components/pos/ReceiptModal.vue';
 
 const notify = useNotificationStore();
 
@@ -718,6 +711,14 @@ const splitPayments = ref([
   { payment_method: 'cash', amount: 0, reference_number: '' },
   { payment_method: 'mpesa', amount: 0, reference_number: '' },
 ]);
+
+// M-Pesa STK Push
+const mpesaPhone = ref('');
+const sendingMpesaPrompt = ref(false);
+const showMpesaPromptModal = ref(false);
+const mpesaPromptStatus = ref('initiating');
+const mpesaCheckoutRequestId = ref('');
+const mpesaCountdown = ref(25);
 
 // Receipt
 const showReceiptModal = ref(false);
@@ -997,13 +998,18 @@ function startNewSale() {
   }
 }
 
-function printReceipt() {
-  window.print();
+// M-Pesa STK Push
+function triggerMpesaPrompt() {
+  if (!mpesaPhone.value && selectedCustomerData.value?.phone) {
+    mpesaPhone.value = selectedCustomerData.value.phone;
+  }
+  showMpesaPromptModal.value = true;
 }
 
-function downloadReceiptPdf() {
-  if (!completedSale.value?.id) return;
-  window.open(`/api/v1/pos/receipt/${completedSale.value.id}/pdf`, '_blank');
+function onMpesaConfirmed(payload) {
+  singleRef.value = payload.transactionCode;
+  mpesaPhone.value = payload.phone;
+  notify.success(`M-Pesa payment captured (${payload.transactionCode})`);
 }
 
 // Add Customer
@@ -1052,6 +1058,35 @@ onUnmounted(() => {
 });
 </script>
 
+<style>
+@media print {
+  /* Global print rules: hide everything except printable receipt */
+  html, body {
+    background: #fff !important;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  #printable-receipt, #printable-receipt * {
+    visibility: visible !important;
+  }
+  #printable-receipt {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 76mm !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: white !important;
+    color: black !important;
+    z-index: 999999 !important;
+  }
+  .v-overlay-container, .v-navigation-drawer, .v-app-bar, .v-card-actions {
+    display: none !important;
+  }
+}
+</style>
 <style scoped>
 .pos-container {
   height: calc(100vh - 100px);

@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\PurchaseOrderController;
 use App\Http\Controllers\Api\V1\PurchaseReturnController;
 use App\Http\Controllers\Api\V1\ReportController;
+use App\Http\Controllers\Api\V1\RoleAndUserController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
 use App\Http\Controllers\Api\V1\StockMovementController;
 use App\Http\Controllers\Api\V1\SupplierController;
@@ -43,6 +44,14 @@ Route::prefix('v1')->group(function () {
         // System Settings
         Route::get('/settings', [SystemSettingController::class, 'index']);
         Route::post('/settings', [SystemSettingController::class, 'update']);
+
+        // User & Access Control (Roles & Permissions)
+        Route::get('/users', [RoleAndUserController::class, 'getUsers']);
+        Route::post('/users', [RoleAndUserController::class, 'createUser']);
+        Route::put('/users/{user}', [RoleAndUserController::class, 'updateUser']);
+        Route::get('/roles', [RoleAndUserController::class, 'getRoles']);
+        Route::put('/roles/{role}/permissions', [RoleAndUserController::class, 'updateRolePermissions']);
+        Route::get('/permissions', [RoleAndUserController::class, 'getPermissions']);
 
         // Branches
         Route::get('/branches', function (Request $request) {
@@ -119,6 +128,7 @@ Route::prefix('v1')->group(function () {
         // Point of Sale (POS) Counter
         Route::get('/pos/products', [PosController::class, 'searchProducts']);
         Route::post('/pos/checkout', [PosController::class, 'checkout']);
+        Route::post('/pos/mpesa-prompt', [PosController::class, 'promptMpesaStkPush']);
         Route::get('/pos/receipt/{sale}', [PosController::class, 'getReceipt']);
         Route::get('/pos/receipt/{sale}/pdf', [PosController::class, 'downloadPdfReceipt']);
         Route::post('/pos/return/{sale}', [PosController::class, 'processReturn']);
@@ -188,6 +198,7 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/reports/dashboard-summary', [ReportController::class, 'getDashboardSummary']);
         Route::get('/reports/sales-analytics', [ReportController::class, 'getSalesAnalytics']);
+        Route::get('/reports/sales', [ReportController::class, 'getSalesAnalytics']);
         Route::get('/reports/top-selling-products', [ReportController::class, 'getTopSellingProducts']);
         Route::get('/reports/inventory-valuation', [ReportController::class, 'getInventoryValuation']);
         Route::get('/reports/expiry-risk-analysis', [ReportController::class, 'getExpiryRiskAnalysis']);

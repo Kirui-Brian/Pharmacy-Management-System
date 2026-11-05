@@ -107,6 +107,94 @@
       </v-col>
     </v-row>
 
+    <!-- Executive Performance & Sales Velocity Chart Card -->
+    <v-card class="elevation-1 rounded-lg pa-4 mb-4" color="white" v-if="authStore.hasPermission('reports.sales')">
+      <div class="d-flex flex-wrap justify-space-between align-center mb-3 ga-2">
+        <div class="d-flex align-center">
+          <v-avatar color="purple-lighten-5" class="mr-3" size="40">
+            <v-icon icon="mdi-chart-timeline-variant" color="purple-darken-2" size="22"></v-icon>
+          </v-avatar>
+          <div>
+            <h2 class="text-subtitle-1 font-weight-bold">7-Day Sales Performance & Revenue Trajectory</h2>
+            <p class="text-caption text-grey">Live revenue velocity and gross profit analytics</p>
+          </div>
+        </div>
+
+        <div class="d-flex align-center ga-2">
+          <v-btn
+            size="small"
+            variant="tonal"
+            color="purple-darken-2"
+            append-icon="mdi-arrow-right"
+            to="/reports"
+            class="text-none font-weight-bold"
+          >
+            Full Business Analytics
+          </v-btn>
+        </div>
+      </div>
+
+      <v-row density="compact">
+        <!-- Mini Sparkline Area Chart -->
+        <v-col cols="12" md="8">
+          <div v-if="loadingStats" class="text-center py-8">
+            <v-progress-circular indeterminate color="purple-darken-2" size="32"></v-progress-circular>
+            <div class="text-caption text-grey mt-2">Loading sales velocity...</div>
+          </div>
+          <div v-else-if="hasSalesTrends" class="w-100">
+            <apexchart
+              key="dashboard-sales-chart"
+              type="area"
+              height="200"
+              :options="chartOptions"
+              :series="chartSeries"
+            ></apexchart>
+          </div>
+          <div v-else class="text-center py-8 text-grey">
+            <v-icon icon="mdi-chart-line" size="36" class="mb-1 text-grey-lighten-1"></v-icon>
+            <div class="text-caption">Awaiting sales transactions for this 7-day window</div>
+          </div>
+        </v-col>
+
+        <!-- Key Financial Snapshot Column -->
+        <v-col cols="12" md="4" class="d-flex flex-column justify-center border-s-md pa-3">
+          <div class="mb-3">
+            <div class="text-caption font-weight-bold text-grey-darken-1">TODAY'S TURNOVER</div>
+            <div class="text-h6 font-weight-bold text-teal-darken-3">
+              KES {{ formatNumber(dashboardSummary?.today?.revenue || 0) }}
+            </div>
+            <div class="text-caption text-grey">
+              {{ dashboardSummary?.today?.transactions || 0 }} completed sales transactions
+            </div>
+          </div>
+
+          <v-divider class="my-2"></v-divider>
+
+          <div class="mb-3">
+            <div class="text-caption font-weight-bold text-grey-darken-1">MONTH-TO-DATE REVENUE</div>
+            <div class="text-subtitle-1 font-weight-bold text-purple-darken-3">
+              KES {{ formatNumber(dashboardSummary?.month_to_date?.revenue || 0) }}
+            </div>
+            <div class="text-caption text-grey">
+              Gross Margin: <strong class="text-teal-darken-2">{{ dashboardSummary?.month_to_date?.gross_margin || 0 }}%</strong>
+            </div>
+          </div>
+
+          <v-divider class="my-2"></v-divider>
+
+          <div>
+            <div class="text-caption font-weight-bold text-grey-darken-1">ON-HAND STOCK VALUATION</div>
+            <div class="text-subtitle-1 font-weight-bold text-blue-darken-3">
+              KES {{ formatNumber(dashboardSummary?.inventory?.valuation_at_cost || 0) }}
+            </div>
+            <div class="text-caption text-deep-orange font-weight-medium">
+              &le; 30d Expiry Risk: KES {{ formatNumber(dashboardSummary?.inventory?.critical_expiry_risk || 0) }}
+            </div>
+          </div>
+        </v-col>
+      </v-row>
+    </v-card>
+
     <!-- Navigation Hub Cards -->
     <v-row class="mb-4" density="compact">
       <v-col cols="12">
@@ -181,9 +269,102 @@
 </template>
 
 <script setup>
+import { ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
+import api from '@/services/api';
+import { formatNumber } from '@/utils/formatters';
 
 const authStore = useAuthStore();
+
+const dashboardSummary = ref(null);
+const salesTrends = ref([]);
+const loadingStats = ref(false);
+
+const hasSalesTrends = computed(() => {
+  return salesTrends.value.length > 0 && chartSeries.value[0]?.data?.length > 0;
+});
+
+const chartSeries = computed(() => [
+  {
+    name: 'Sales Revenue (KES)',
+    data: salesTrends.value.map((t) => Math.round(t.revenue || 0)),
+  },
+  {
+    name: 'Gross Profit (KES)',
+    data: salesTrends.value.map((t) => Math.round(t.gross_profit || 0)),
+  },
+]);
+
+const chartOptions = computed(() => ({
+  chart: {
+    id: 'dashboard-sales-chart',
+    type: 'area',
+    toolbar: { show: false },
+    fontFamily: 'inherit',
+    sparkline: { enabled: false },
+  },
+  colors: ['#7B1FA2', '#00897B'],
+  dataLabels: { enabled: false },
+  stroke: { curve: 'smooth', width: 2 },
+  xaxis: {
+    categories: salesTrends.value.map((t) => t.date),
+    labels: { rotate: -20, style: { fontSize: '10px' } },
+  },
+  yaxis: {
+    labels: {
+      formatter: (val) => 'KES ' + Number(val).toLocaleString(),
+    },
+  },
+  tooltip: {
+    y: {
+      formatter: (val) => 'KES ' + Number(val).toLocaleString(),
+    },
+  },
+  legend: { position: 'top', horizontalAlign: 'right' },
+}));
+
+async function loadDashboardAnalytics() {
+  if (!authStore.hasPermission('reports.sales')) return;
+
+  loadingStats.value = true;
+  try {
+    const today = new Date();
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    const toDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    const [summaryRes, salesRes] = await Promise.all([
+      api.get('/reports/dashboard-summary').catch((err) => {
+        console.warn('Dashboard summary call failed:', err);
+        return null;
+      }),
+      api.get('/reports/sales-analytics', {
+        params: {
+          start_date: toDate(sevenDaysAgo),
+          end_date: toDate(today),
+        },
+      }).catch((err) => {
+        console.warn('Dashboard sales analytics call failed:', err);
+        return null;
+      }),
+    ]);
+
+    if (summaryRes?.data?.success) {
+      dashboardSummary.value = summaryRes.data.data;
+    }
+    if (salesRes?.data?.success) {
+      salesTrends.value = salesRes.data.data.daily_trends || [];
+    }
+  } catch (error) {
+    console.error('Failed to load dashboard analytics:', error);
+  } finally {
+    loadingStats.value = false;
+  }
+}
+
+onMounted(() => {
+  loadDashboardAnalytics();
+});
 
 const modules = [
   {

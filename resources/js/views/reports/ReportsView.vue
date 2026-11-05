@@ -27,6 +27,7 @@
             <v-btn value="7days" size="small" class="text-none">7 Days</v-btn>
             <v-btn value="30days" size="small" class="text-none">30 Days</v-btn>
             <v-btn value="this_month" size="small" class="text-none">This Month</v-btn>
+            <v-btn value="this_year" size="small" class="text-none">This Year</v-btn>
           </v-btn-toggle>
 
           <v-btn
@@ -231,6 +232,49 @@
         </v-col>
       </v-row>
 
+      <!-- Interactive ApexCharts Visualizations -->
+      <v-row density="compact" class="mb-4">
+        <!-- Revenue & Profit Trend Area Chart -->
+        <v-col cols="12" lg="8">
+          <v-card class="elevation-1 rounded-lg pa-4 h-100">
+            <div class="d-flex justify-space-between align-center mb-2">
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-chart-areaspline" color="purple-darken-2" class="mr-2" size="22"></v-icon>
+                <h2 class="text-subtitle-1 font-weight-bold">Revenue & Gross Profit Trajectory</h2>
+              </div>
+              <v-chip size="x-small" color="purple" variant="tonal">Interactive</v-chip>
+            </div>
+            <div v-if="salesTrendSeries[0]?.data?.length > 0">
+              <apexchart key="rep-sales-trend" type="area" height="260" :options="salesTrendChartOptions" :series="salesTrendSeries"></apexchart>
+            </div>
+            <div v-else class="text-center py-8 text-grey">
+              <v-icon icon="mdi-chart-line" size="40" class="mb-2 text-grey-lighten-1"></v-icon>
+              <div>No sales trend data recorded for selected period</div>
+            </div>
+          </v-card>
+        </v-col>
+
+        <!-- Payment Method Distribution Donut -->
+        <v-col cols="12" lg="4">
+          <v-card class="elevation-1 rounded-lg pa-4 h-100">
+            <div class="d-flex justify-space-between align-center mb-2">
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-chart-donut" color="teal-darken-2" class="mr-2" size="22"></v-icon>
+                <h2 class="text-subtitle-1 font-weight-bold">Payment Methods</h2>
+              </div>
+              <v-chip size="x-small" color="teal" variant="tonal">Volume</v-chip>
+            </div>
+            <div v-if="paymentDonutSeries.some(v => v > 0)">
+              <apexchart key="rep-payment-donut" type="donut" height="260" :options="paymentDonutOptions" :series="paymentDonutSeries"></apexchart>
+            </div>
+            <div v-else class="text-center py-8 text-grey">
+              <v-icon icon="mdi-pie-chart" size="40" class="mb-2 text-grey-lighten-1"></v-icon>
+              <div>No payment transactions recorded</div>
+            </div>
+          </v-card>
+        </v-col>
+      </v-row>
+
       <v-row density="compact" class="mb-4">
         <!-- Daily Sales Trend Table -->
         <v-col cols="12" lg="7">
@@ -324,6 +368,24 @@
     <!-- TAB 2: INVENTORY VALUATION & DEAD STOCK -->
     <!-- ========================================================================= -->
     <div v-if="activeTab === 'valuation'">
+      <!-- Inventory Valuation by Category Chart -->
+      <v-card class="elevation-1 rounded-lg pa-4 mb-4">
+        <div class="d-flex justify-space-between align-center mb-2">
+          <div class="d-flex align-center">
+            <v-icon icon="mdi-chart-bar" color="blue-darken-2" class="mr-2" size="22"></v-icon>
+            <h2 class="text-subtitle-1 font-weight-bold">Category Valuation Comparison (Cost vs Retail)</h2>
+          </div>
+          <v-chip size="x-small" color="blue" variant="tonal">KES Valuation</v-chip>
+        </div>
+        <div v-if="categoryBarSeries[0]?.data?.length > 0">
+          <apexchart key="rep-category-bar" type="bar" height="280" :options="categoryBarOptions" :series="categoryBarSeries"></apexchart>
+        </div>
+        <div v-else class="text-center py-6 text-grey">
+          <v-icon icon="mdi-chart-bar" size="36" class="mb-2 text-grey-lighten-1"></v-icon>
+          <div>No category valuation data available</div>
+        </div>
+      </v-card>
+
       <!-- Valuation by Category Table -->
       <v-card class="elevation-1 rounded-lg pa-4 mb-4">
         <div class="d-flex justify-space-between align-center mb-3">
@@ -525,6 +587,24 @@
           </v-card>
         </v-col>
       </v-row>
+
+      <!-- Expiry Risk Distribution Chart -->
+      <v-card class="elevation-1 rounded-lg pa-4 mb-4">
+        <div class="d-flex justify-space-between align-center mb-2">
+          <div class="d-flex align-center">
+            <v-icon icon="mdi-chart-donut" color="deep-orange" class="mr-2" size="22"></v-icon>
+            <h2 class="text-subtitle-1 font-weight-bold">Capital Exposure by Expiry Stage</h2>
+          </div>
+          <v-chip size="x-small" color="deep-orange" variant="tonal">Risk Distribution</v-chip>
+        </div>
+        <div v-if="expiryDonutSeries.some(v => v > 0)">
+          <apexchart key="rep-expiry-donut" type="donut" height="260" :options="expiryDonutOptions" :series="expiryDonutSeries"></apexchart>
+        </div>
+        <div v-else class="text-center py-6 text-grey">
+          <v-icon icon="mdi-shield-check" size="36" color="teal" class="mb-2"></v-icon>
+          <div class="font-weight-medium text-teal-darken-3">No critical expiry exposure detected</div>
+        </div>
+      </v-card>
 
       <!-- Detailed Expiry Watchlist Table -->
       <v-card class="elevation-1 rounded-lg pa-4">
@@ -949,9 +1029,167 @@ function applyPreset(preset) {
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     startDate.value = toInputDate(firstDay);
     endDate.value = toInputDate(today);
+  } else if (preset === 'this_year') {
+    const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
+    startDate.value = toInputDate(firstDayOfYear);
+    endDate.value = toInputDate(today);
   }
   loadFilteredReports();
 }
+
+// =========================================================================
+// ApexCharts Configuration & Series
+// =========================================================================
+
+// Tab 1: Daily Revenue & Gross Profit Area Chart
+const salesTrendSeries = computed(() => {
+  const trends = salesData.value?.daily_trends || [];
+  return [
+    {
+      name: 'Sales Revenue (KES)',
+      data: trends.map((t) => Math.round(t.revenue || 0)),
+    },
+    {
+      name: 'Gross Profit (KES)',
+      data: trends.map((t) => Math.round(t.gross_profit || 0)),
+    },
+  ];
+});
+
+const salesTrendChartOptions = computed(() => ({
+  chart: {
+    type: 'area',
+    toolbar: { show: false },
+    fontFamily: 'inherit',
+  },
+  colors: ['#7B1FA2', '#00897B'],
+  dataLabels: { enabled: false },
+  stroke: { curve: 'smooth', width: 2 },
+  xaxis: {
+    categories: (salesData.value?.daily_trends || []).map((t) => t.date),
+    labels: { rotate: -25, style: { fontSize: '11px' } },
+  },
+  yaxis: {
+    labels: {
+      formatter: (val) => 'KES ' + Number(val).toLocaleString(),
+    },
+  },
+  tooltip: {
+    y: {
+      formatter: (val) => 'KES ' + Number(val).toLocaleString(),
+    },
+  },
+  legend: { position: 'top', horizontalAlign: 'right' },
+}));
+
+// Tab 1: Payment Method Distribution Donut
+const paymentDonutSeries = computed(() => {
+  const methods = salesData.value?.payment_methods || {};
+  return [
+    Number(methods.cash || 0),
+    Number(methods.mpesa || 0),
+    Number(methods.card || 0),
+    Number(methods.credit || 0),
+  ];
+});
+
+const paymentDonutOptions = computed(() => ({
+  chart: {
+    type: 'donut',
+    fontFamily: 'inherit',
+  },
+  labels: ['Cash', 'M-Pesa', 'Card', 'Credit Account'],
+  colors: ['#00897B', '#2E7D32', '#1E88E5', '#FB8C00'],
+  legend: { position: 'bottom' },
+  tooltip: {
+    y: {
+      formatter: (val) => 'KES ' + Number(val).toLocaleString(),
+    },
+  },
+  dataLabels: {
+    enabled: true,
+    formatter: (val) => Math.round(val) + '%',
+  },
+}));
+
+// Tab 2: Category Valuation Bar Chart
+const categoryBarSeries = computed(() => {
+  const categories = valuationData.value?.by_category || [];
+  return [
+    {
+      name: 'Cost Valuation (KES)',
+      data: categories.map((c) => Math.round(c.cost_value || 0)),
+    },
+    {
+      name: 'Retail Valuation (KES)',
+      data: categories.map((c) => Math.round(c.retail_value || 0)),
+    },
+  ];
+});
+
+const categoryBarOptions = computed(() => ({
+  chart: {
+    type: 'bar',
+    toolbar: { show: false },
+    fontFamily: 'inherit',
+  },
+  plotOptions: {
+    bar: {
+      horizontal: false,
+      columnWidth: '55%',
+      borderRadius: 4,
+    },
+  },
+  colors: ['#1976D2', '#00897B'],
+  dataLabels: { enabled: false },
+  stroke: { show: true, width: 2, colors: ['transparent'] },
+  xaxis: {
+    categories: (valuationData.value?.by_category || []).map((c) => c.category),
+    labels: { rotate: -20, style: { fontSize: '11px' } },
+  },
+  yaxis: {
+    labels: {
+      formatter: (val) => 'KES ' + Number(val).toLocaleString(),
+    },
+  },
+  tooltip: {
+    y: {
+      formatter: (val) => 'KES ' + Number(val).toLocaleString(),
+    },
+  },
+  legend: { position: 'top', horizontalAlign: 'right' },
+}));
+
+// Tab 3: Expiry Risk Distribution Donut
+const expiryDonutSeries = computed(() => {
+  const b = expiryData.value?.buckets;
+  if (!b) return [0, 0, 0, 0];
+  return [
+    Number(b.expired?.cost_value || 0),
+    Number(b.critical_30?.cost_value || 0),
+    Number(b.warning_60?.cost_value || 0),
+    Number(b.caution_90?.cost_value || 0),
+  ];
+});
+
+const expiryDonutOptions = computed(() => ({
+  chart: {
+    type: 'donut',
+    fontFamily: 'inherit',
+  },
+  labels: ['Expired', 'Critical (≤30d)', 'Warning (31–60d)', 'Caution (61–90d)'],
+  colors: ['#B71C1C', '#E53935', '#FB8C00', '#FFB300'],
+  legend: { position: 'bottom' },
+  tooltip: {
+    y: {
+      formatter: (val) => 'KES ' + Number(val).toLocaleString(),
+    },
+  },
+  dataLabels: {
+    enabled: true,
+    formatter: (val) => Math.round(val) + '%',
+  },
+}));
 
 function getPaymentIcon(method) {
   const icons = {

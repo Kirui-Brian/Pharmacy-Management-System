@@ -11,6 +11,23 @@ use Illuminate\Http\Request;
 
 class SystemSettingController extends Controller
 {
+    protected array $groupMap = [
+        'company_name' => 'general',
+        'tax_pin' => 'general',
+        'currency_code' => 'general',
+        'currency_symbol' => 'general',
+        'low_stock_threshold' => 'inventory',
+        'expiry_alert_days_first' => 'inventory',
+        'expiry_alert_days_critical' => 'inventory',
+        'block_expired_sales' => 'inventory',
+        'receipt_header' => 'pos',
+        'receipt_footer' => 'pos',
+        'default_prescription_tax' => 'pos',
+        'default_general_tax' => 'pos',
+        'enable_split_payments' => 'pos',
+        'allow_credit_sales' => 'pos',
+    ];
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -43,38 +60,88 @@ class SystemSettingController extends Controller
             });
         });
 
+        // Also supply flat values for direct frontend binding convenience
+        $flat = [];
+        foreach ($settings as $setting) {
+            $flat[$setting->key] = match ($setting->type) {
+                'boolean' => filter_var($setting->value, FILTER_VALIDATE_BOOLEAN),
+                'integer' => (int) $setting->value,
+                'float' => (float) $setting->value,
+                'json' => json_decode($setting->value, true),
+                default => $setting->value,
+            };
+        }
+
         return response()->json([
             'status' => 'success',
             'data' => $grouped,
+            'flat' => $flat,
         ]);
     }
 
     public function update(UpdateSettingsRequest $request): JsonResponse
     {
         $user = $request->user();
-        $updatedKeys = [];
+        $rawSettings = $request->input('settings', []);
+        $normalized = [];
 
-        foreach ($request->settings as $settingData) {
-            $key = $settingData['key'];
-            $value = $settingData['value'];
-            $group = $settingData['group'] ?? 'general';
+        // Case 1: Sequential list of objects [{ key: '...', value: '...' }]
+        if (is_array($rawSettings) && isset($rawSettings[0]) && is_array($rawSettings[0]) && isset($rawSettings[0]['key'])) {
+            foreach ($rawSettings as $item) {
+                $k = $item['key'];
+                $normalized[$k] = [
+                    'value' => $item['value'] ?? null,
+                    'group' => $item['group'] ?? ($this->groupMap[$k] ?? 'general'),
+                ];
+            }
+        } else {
+            // Case 2: Associative map (can include nested groups or flat keys)
+            foreach ($rawSettings as $key => $val) {
+                // If it's a known top-level group like 'general', 'inventory', 'pos'
+                if (in_array($key, ['general', 'inventory', 'pos', 'notifications']) && is_array($val)) {
+                    foreach ($val as $subKey => $subVal) {
+                        $resolvedValue = is_array($subVal) && array_key_exists('value', $subVal) ? $subVal['value'] : $subVal;
+                        $normalized[$subKey] = [
+                            'value' => $resolvedValue,
+                            'group' => $key,
+                        ];
+                    }
+                } else {
+                    // Flat key => value
+                    $normalized[$key] = [
+                        'value' => is_array($val) && array_key_exists('value', $val) ? $val['value'] : $val,
+                        'group' => $this->groupMap[$key] ?? 'general',
+                    ];
+                }
+            }
+        }
+
+        $updatedKeys = [];
+        foreach ($normalized as $key => $data) {
+            // Ignore non-scalar or meta keys that aren't settings
+            if (in_array($key, ['general', 'inventory', 'pos', 'maintenance', 'notifications'])) {
+                continue;
+            }
 
             SystemSetting::set(
                 key: $key,
-                value: $value,
-                group: $group,
-                branchId: null, // Global pharmacy setting
+                value: $data['value'],
+                group: $data['group'],
+                branchId: null,
                 pharmacyId: $user->pharmacy_id
             );
 
             $updatedKeys[] = $key;
         }
 
-        AuditLog::log('settings_updated', 'System settings updated: ' . implode(', ', $updatedKeys));
+        try {
+            AuditLog::log('settings_updated', 'System settings updated: ' . implode(', ', $updatedKeys));
+        } catch (\Throwable) {}
 
         return response()->json([
             'status' => 'success',
             'message' => 'Settings updated successfully',
+            'updated_keys' => $updatedKeys,
         ]);
     }
 }
